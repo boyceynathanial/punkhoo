@@ -235,7 +235,6 @@ class BaseDataset(torch.utils.data.Dataset):
     self.dropout_rate: float = 0
     self.dropout_every_n_epochs: int = None
     self.tag_dropout_rate: float = 0
-
     # augmentation
     flip_p = 0.5 if flip_aug else 0.0
     if color_aug:
@@ -259,6 +258,7 @@ class BaseDataset(torch.utils.data.Dataset):
     self.image_data: Dict[str, ImageInfo] = {}
 
     self.replacements = {}
+    self.mask_max_attention = 1
 
   def set_current_epoch(self, epoch):
     self.current_epoch = epoch
@@ -467,14 +467,32 @@ class BaseDataset(torch.utils.data.Dataset):
     random.shuffle(self.buckets_indices)
     self.bucket_manager.shuffle()
 
+  def load_mask(self, path):
+    try:
+      mask_path = path[:path.rindex('.')]+".mask"
+      mask = np.array(Image.open(mask_path))
+      if len(mask.shape) > 2 and mask.max() <= 255:
+        print(mask.shape)
+        return np.array(Image.open(mask_path).convert("L"))
+      elif len(mask.shape) == 2 and mask.max() > 255:
+        print(mask.max())
+        return mask//(((2**16)-1)//255)
+      elif len(mask.shape) == 2 and mask.max() <= 255:
+        return mask
+      else:
+        print(f"{mask_path} has invalid mask format: Defaulting to no mask")
+        return np.ones_like(np.array(Image.open(path).convert("L")))*255
+    except:
+      print(f"{mask_path} not found: Defaulting to no mask")
+    return np.ones_like(np.array(Image.open(path).convert("L")))*255
+
   def load_image(self, image_path):
     image = Image.open(image_path)
-    # if not image.mode == "RGB":
-      # image = image.convert("RGB")
     if not image.mode == "RGBA":
       image = image.convert("RGBA")
     img = np.array(image, np.uint8)
-    # alpha_channel = np.array(image, np.uint8)[:,:,-1]
+    #if img[:,-1].mean() == 255:
+    img[...,-1] = self.load_mask(image_path)
     return img
 
   def trim_and_resize_if_required(self, image, reso, resized_size):
@@ -518,14 +536,14 @@ class BaseDataset(torch.utils.data.Dataset):
       img_tensor = self.image_transforms(image)
       img_tensor = img_tensor.unsqueeze(0).to(device=vae.device, dtype=vae.dtype)
       info.latents = vae.encode(img_tensor).latent_dist.sample().squeeze(0).to("cpu")
-      info.mask = mask/255
+      info.mask = mask/(255/self.mask_max_attention)
 
       if self.flip_aug:
         image = image[:, ::-1].copy()     # cannot convert to Tensor without copy
         img_tensor = self.image_transforms(image)
         img_tensor = img_tensor.unsqueeze(0).to(device=vae.device, dtype=vae.dtype)
         info.latents_flipped = vae.encode(img_tensor).latent_dist.sample().squeeze(0).to("cpu")
-        info.mask_flipped = mask[::-1]/255
+        info.mask_flipped = mask[::-1]/(255/self.mask_max_attention)
 
   def get_image_size(self, image_path):
     image = Image.open(image_path)
@@ -633,7 +651,7 @@ class BaseDataset(torch.utils.data.Dataset):
       else:
         # 画像を読み込み、必要ならcropする
         img, face_cx, face_cy, face_w, face_h = self.load_image_with_face_info(image_info.absolute_path)
-        mask = img[:,:,-1] #grab alpha channel
+        mask = img[:,:,-1]/(255/self.mask_max_attention) #grab alpha channel
         img = img[:,:,:3] #drop alpha channel
         im_h, im_w = img.shape[0:2]
 
@@ -660,7 +678,7 @@ class BaseDataset(torch.utils.data.Dataset):
 
         latents = None
         image = self.image_transforms(img)      # -1.0~1.0のtorch.Tensorになる
-        mask = (self.image_transforms(mask)+1)*.5
+        mask = torch.from_numpy(mask)
       masks.append(torch.tensor(mask))
       images.append(image)
       latents_list.append(latents)
