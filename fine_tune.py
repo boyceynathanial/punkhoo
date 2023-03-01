@@ -9,7 +9,6 @@ import os
 from tqdm import tqdm
 import torch
 from accelerate.utils import set_seed
-import diffusers
 from diffusers import DDPMScheduler
 
 import library.train_util as train_util
@@ -216,6 +215,8 @@ def train(args):
   if accelerator.is_main_process:
     accelerator.init_trackers("finetuning")
 
+  loss_list = []
+  loss_total = 0.0
   for epoch in range(num_train_epochs):
     print(f"epoch {epoch+1}/{num_train_epochs}")
     train_dataset.set_current_epoch(epoch + 1)
@@ -223,7 +224,6 @@ def train(args):
     for m in training_models:
       m.train()
 
-    loss_total = 0
     for step, batch in enumerate(train_dataloader):
       with accelerator.accumulate(training_models[0]):  # 複数モデルに対応していない模様だがとりあえずこうしておく
         with torch.no_grad():
@@ -263,6 +263,25 @@ def train(args):
           target = noise_scheduler.get_velocity(latents, noise, timesteps)
         else:
           target = noise
+          
+        if args.masked_loss and batch['masks'] is not None:
+            
+          mask = (
+              batch['masks']
+              .to(noise_pred.device)
+              .reshape(
+                  noise_pred.shape[0], 1, noise_pred.shape[2] * 8, noise_pred.shape[3] * 8
+              )
+          )
+          # resize to match noise_pred
+          mask = torch.nn.functional.interpolate(
+              mask.float(),
+              size=noise_pred.shape[-2:],
+              mode="nearest",
+          )
+
+          noise_pred = noise_pred * mask
+          target = target * mask
 
         loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="mean")
 
@@ -282,10 +301,18 @@ def train(args):
         progress_bar.update(1)
         global_step += 1
 
-      current_loss = loss.detach().item()        # 平均なのでbatch sizeは関係ないはず
+      current_loss = loss.detach().item()
+      if epoch == 0:
+        loss_list.append(current_loss)
+      else:
+        loss_total -= loss_list[step]
+        loss_list[step] = current_loss
+      loss_total += current_loss
+      avr_loss = loss_total / len(loss_list)
+      
       if args.logging_dir is not None:
         logs = {"loss": current_loss, "lr": float(lr_scheduler.get_last_lr()[0])}
-        logs = {"avr_loss": loss_total / (step+1)}
+        logs = {"avr_loss": avr_loss}
         if args.optimizer_type.lower() == "DAdaptation".lower():  # tracking d*lr value
           # print(lr_scheduler.optimizers)
           logs["lr/d*lr"] = lr_scheduler.optimizers[0].param_groups[0]['d']*lr_scheduler.optimizers[0].param_groups[0]['lr']
@@ -293,12 +320,16 @@ def train(args):
           logs["lrD"] = lr_scheduler.optimizers[0].param_groups[0]['lr']
           logs["gsq_weighted"] = lr_scheduler.optimizers[0].param_groups[0]['gsq_weighted']
           
+          print(lr_scheduler.optimizers)
         accelerator.log(logs, step=global_step)
 
       # TODO moving averageにする
-      loss_total += current_loss
-      avr_loss = loss_total / (step+1)
-      logs = {"loss": avr_loss}  # , "lr": lr_scheduler.get_last_lr()[0]}
+      # loss_total += current_loss
+      # avr_loss = loss_total / (step+1)
+      if args.masked_loss and batch['masks'] is not None:
+        logs = {"loss": avr_loss, "Batch Mask Average Weight": batch['masks'].mean().item()}
+      else:
+        logs = {"loss": avr_loss}  # , "lr": lr_scheduler.get_last_lr()[0]}
       progress_bar.set_postfix(**logs)
 
       if global_step >= args.max_train_steps:

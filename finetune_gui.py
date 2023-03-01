@@ -282,6 +282,15 @@ def train_model(
         if not os.path.exists(train_dir):
             os.mkdir(train_dir)
 
+        # Set the path to the file you want to delete
+        cap_file_path = f"{train_dir}/{caption_metadata_filename}"
+
+        # Check if the file exists
+        if os.path.exists(cap_file_path):
+            # Delete the file
+            os.remove(cap_file_path)
+            print(f"Caption file already exist, deleting... {cap_file_path} deleted successfully")
+
         run_cmd = (
             f'./venv/Scripts/python.exe finetune/merge_captions_to_metadata.py'
         )
@@ -290,7 +299,7 @@ def train_model(
         else:
             run_cmd += f' --caption_extension={caption_extension}'
         run_cmd += f' "{image_folder}"'
-        run_cmd += f' "{train_dir}/{caption_metadata_filename}"'
+        run_cmd += f' "{cap_file_path}"'
         if full_path:
             run_cmd += f' --full_path'
 
@@ -349,7 +358,7 @@ def train_model(
     lr_warmup_steps = round(float(int(lr_warmup) * int(max_train_steps) / 100))
     print(f'lr_warmup_steps = {lr_warmup_steps}')
 
-    run_cmd = f'accelerate launch --num_cpu_threads_per_process={num_cpu_threads_per_process} "./fine_tune.py"'
+    run_cmd = f'accelerate launch --num_cpu_threads_per_process={num_cpu_threads_per_process} "./fine_tune.py" --masked_loss'
     if v2:
         run_cmd += ' --v2'
     if v_parameterization:
