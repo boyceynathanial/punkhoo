@@ -28,6 +28,6 @@ huggingface-hub==0.13.3; sys_platform != 'darwin'
 huggingface-hub==0.13.0; sys_platform == 'darwin'
 tensorflow==2.10.1; sys_platform != 'darwin'
 # For locon support
-lycoris_lora==0.1.5-dev2
+lycoris_lora==0.1.5-dev4
 # for kohya_ss library
 .
