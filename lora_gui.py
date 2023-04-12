@@ -548,6 +548,17 @@ def train_model(
             return
         run_cmd += f' --network_module=lycoris.kohya'
         run_cmd += f' --network_args "conv_dim={conv_dim}" "conv_alpha={conv_alpha}" "algo=ia3"'
+        
+    if LoRA_type == 'LyCORIS/dylora':
+        try:
+            import lycoris
+        except ModuleNotFoundError:
+            print(
+                "\033[1;31mError:\033[0m The required module 'lycoris_lora' is not installed. Please install by running \033[33mupgrade.ps1\033[0m before running this program."
+            )
+            return
+        run_cmd += f' --network_module=lycoris.kohya'
+        run_cmd += f' --network_args "conv_dim={conv_dim}" "conv_alpha={conv_alpha}" "algo=dylora"'
     
         
     if LoRA_type in ['Kohya LoCon', 'Standard']:
@@ -807,6 +818,7 @@ def lora_tab(
                 choices=[
                     'Kohya LoCon',
                     # 'LoCon',
+                    'LyCORIS/dylora',
                     'LyCORIS/ia3',
                     'LyCORIS/LoCon',
                     'LyCORIS/LoHa',
@@ -905,6 +917,7 @@ def lora_tab(
             if (
                 LoRA_type == 'LoCon'
                 or LoRA_type == 'Kohya LoCon'
+                or LoRA_type == 'LyCORIS/dylora'
                 or LoRA_type == 'LyCORIS/ia3'
                 or LoRA_type == 'LyCORIS/LoHa'
                 or LoRA_type == 'LyCORIS/LoKr'
