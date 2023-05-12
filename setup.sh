@@ -1073,6 +1073,7 @@ run_launcher() {
     $([ "$NO_SETUP" = "true" ] && echo "--no-setup") \
     --torch-version="$TORCH_VERSION" \
     $([ "$REPAIR" = "true" ] && echo "--repair") \
+    --torch-version="$TORCH_VERSION" \
     $([ "$SETUP_ONLY" = "true" ] && echo "--setup-only") \
     $([ "$SKIP_SPACE_CHECK" = "true" ] && echo "--skipspacecheck") \
     $([ "$UPDATE" = "true" ] && echo "--update") \
