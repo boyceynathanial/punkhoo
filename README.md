@@ -10,22 +10,22 @@ If you run on Linux and would like to use the GUI, there is now a port of it as 
 
 - [Tutorials](#tutorials)
 - [Training guide: common data preparation, options etc.](./docs/train_README-ja.md)
-  - [Chinese version](./docs/train_README-zh.md)
-- [Dataset config](./docs/config_README-ja.md) 
-- [DreamBooth training guide](./docs/train_db_README-ja.md)
-- [Step by Step fine-tuning guide](./docs/fine_tune_README_ja.md):
-- [Training LoRA](./docs/train_network_README-ja.md)
-- [training Textual Inversion](./docs/train_ti_README-ja.md)
-- [Image generation](./docs/gen_img_README-ja.md)
-- [Model conversion (note.com)](https://note.com/kohya_ss/n/n374f316fe4ad)
-- [Required Dependencies](#required-prerequisites)
-- [Installation and Upgrading](#installation-and-upgrading)
-  - [macOS, Windows, Linux, BSD](#macos-windows-linux-bsd)
-  - [Containers](#containers)
-    - [Configuration](#configuration)
-      - [Command Line Arguments](#command-line-arguments)
-      - [Configuration File](#configuration-file)
-    - [Running Kohya_SS](#running-kohya_ss)
+* [Training guide - common](./docs/train_README-ja.md) : data preparation, options etc... 
+  * [Chinese version](./docs/train_README-zh.md)
+* [Dataset config](./docs/config_README-ja.md) 
+* [DreamBooth training guide](./docs/train_db_README-ja.md)
+* [Step by Step fine-tuning guide](./docs/fine_tune_README_ja.md):
+* [Training LoRA](./docs/train_network_README-ja.md)
+* [training Textual Inversion](./docs/train_ti_README-ja.md)
+* [Image generation](./docs/gen_img_README-ja.md)
+* note.com [Model conversion](https://note.com/kohya_ss/n/n374f316fe4ad)
+- [Required Dependencies](#required-dependencies)
+  - [Linux/macOS](#linux-and-macos-dependencies)
+- [Installation](#installation)
+    - [Docker](#docker)
+    - [Linux/macOS](#linux-and-macos)
+      - [Default Install Locations](#install-location)
+    - [Windows](#windows)
     - [CUDNN 8.6](#optional--cudnn-86)
 - [Dreambooth](#dreambooth)
 - [Finetune](#finetune)
@@ -574,7 +574,7 @@ You can run launcher.py whenever you want to launch the application with the spe
 <details>
 <summary>21.5</summary>
 
-* 2023/07/11 (v21.5.11)
+* 2023/07/15 (v21.5.11)
   - Added an option `--dim_from_weights` to `train_network.py` to automatically determine the dim(rank) from the weight file. [PR #491](https://github.com/kohya-ss/sd-scripts/pull/491) Thanks to AI-Casanova!
     - It is useful in combination with `resize_lora.py`. Please see the PR for details.
   - Fixed a bug where the noise resolution was incorrect with Multires noise. [PR #489](https://github.com/kohya-ss/sd-scripts/pull/489) Thanks to sdbds!
@@ -585,6 +585,11 @@ You can run launcher.py whenever you want to launch the application with the spe
     - If you specify a number with the `--vae_slices` option, the memory-efficient VAE will be used. The maximum output size will be larger, but it will be slower. Please specify a value of about `16` or `32`.
     - The implementation of the VAE is in `library/slicing_vae.py`.
 * 2023/04/09 (v21.5.10)
+  - Fix for wandb #ebabchick
+  - Added [English translation of documents](https://github.com/darkstorm2150/sd-scripts#links-to-usage-documentation) by darkstorm2150. Thank you very much!
+  - The prompt for sample generation during training can now be specified in `.toml` or `.json`. [PR #504](https://github.com/kohya-ss/sd-scripts/pull/504) Thanks to Linaqruf!
+    - For details on prompt description, please see the PR.
+* 2023/04/07 (v21.5.10)
   - Fix issue https://github.com/bmaltais/kohya_ss/issues/734
   - The documentation has been moved to the `docs` folder. If you have links, please change them.
   - DAdaptAdaGrad, DAdaptAdan, and DAdaptSGD are now supported by DAdaptation. [PR#455](https://github.com/kohya-ss/sd-scripts/pull/455) Thanks to sdbds!
