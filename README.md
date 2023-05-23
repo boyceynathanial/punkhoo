@@ -9,16 +9,15 @@ If you run on Linux and would like to use the GUI, there is now a port of it as 
 ### Table of Contents
 
 - [Tutorials](#tutorials)
-- [Training guide: common data preparation, options etc.](./docs/train_README-ja.md)
 * [Training guide - common](./docs/train_README-ja.md) : data preparation, options etc... 
   * [Chinese version](./docs/train_README-zh.md)
-* [Dataset config](./docs/config_README-ja.md) 
-* [DreamBooth training guide](./docs/train_db_README-ja.md)
-* [Step by Step fine-tuning guide](./docs/fine_tune_README_ja.md):
-* [Training LoRA](./docs/train_network_README-ja.md)
-* [training Textual Inversion](./docs/train_ti_README-ja.md)
-* [Image generation](./docs/gen_img_README-ja.md)
-* note.com [Model conversion](https://note.com/kohya_ss/n/n374f316fe4ad)
+  * [Dataset config](./docs/config_README-ja.md) 
+  * [DreamBooth training guide](./docs/train_db_README-ja.md)
+  * [Step by Step fine-tuning guide](./docs/fine_tune_README_ja.md):
+  * [Training LoRA](./docs/train_network_README-ja.md)
+  * [training Textual Inversion](./docs/train_ti_README-ja.md)
+  * [Image generation](./docs/gen_img_README-ja.md)
+  * [Model conversion](https://note.com/kohya_ss/n/n374f316fe4ad)
 - [Required Dependencies](#required-dependencies)
   - [Linux/macOS](#linux-and-macos-dependencies)
 - [Installation](#installation)
@@ -73,7 +72,11 @@ Newer Tutorial: [Generate Studio Quality Realistic Photos By Kohya LoRA Stable D
 
 [![Newer Tutorial: Generate Studio Quality Realistic Photos By Kohya LoRA Stable Diffusion Training](https://user-images.githubusercontent.com/19240467/235306147-85dd8126-f397-406b-83f2-368927fa0281.png)](https://www.youtube.com/watch?v=TpuDOsuKIBo)
 
-</details>
+Newer Tutorial: [How To Install And Use Kohya LoRA GUI / Web UI on RunPod IO](https://www.youtube.com/watch?v=3uzCNrQao3o):
+
+[![How To Install And Use Kohya LoRA GUI / Web UI on RunPod IO With Stable Diffusion & Automatic1111](https://github-production-user-asset-6210df.s3.amazonaws.com/19240467/238678226-0c9c3f7d-c308-4793-b790-999fdc271372.png)](https://www.youtube.com/watch?v=3uzCNrQao3o)
+
+## Required Dependencies
 
 
 ## Installation and Upgrading
@@ -574,6 +577,14 @@ You can run launcher.py whenever you want to launch the application with the spe
 <details>
 <summary>21.5</summary>
 
+* 2023/07/15 (v21.5.12)
+- Fixed several bugs.
+  - The state is saved even when the `--save_state` option is not specified in `fine_tune.py` and `train_db.py`. [PR #521](https://github.com/kohya-ss/sd-scripts/pull/521) Thanks to akshaal!
+  - Cannot load LoRA without `alpha`. [PR #527](https://github.com/kohya-ss/sd-scripts/pull/527) Thanks to Manjiz!
+  - Minor changes to console output during sample generation. [PR #515](https://github.com/kohya-ss/sd-scripts/pull/515) Thanks to yanhuifair!
+- The generation script now uses xformers for VAE as well.
+- Fixed an issue where an error would occur if the encoding of the prompt file was different from the default. [PR #510](https://github.com/kohya-ss/sd-scripts/pull/510) Thanks to sdbds!
+  - Please save the prompt file in UTF-8.
 * 2023/07/15 (v21.5.11)
   - Added an option `--dim_from_weights` to `train_network.py` to automatically determine the dim(rank) from the weight file. [PR #491](https://github.com/kohya-ss/sd-scripts/pull/491) Thanks to AI-Casanova!
     - It is useful in combination with `resize_lora.py`. Please see the PR for details.
