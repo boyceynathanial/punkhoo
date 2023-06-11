@@ -63,6 +63,7 @@ import safetensors.torch
 from library.lpw_stable_diffusion import StableDiffusionLongPromptWeightingPipeline
 import library.model_util as model_util
 import library.huggingface_util as huggingface_util
+from library.original_unet import UNet2DConditionModel
 
 # Tokenizer: checkpointから読み込むのではなくあらかじめ提供されているものを使う
 TOKENIZER_PATH = "openai/clip-vit-large-patch14"
@@ -1787,96 +1788,21 @@ class FlashAttentionFunction(torch.autograd.function.Function):
         return dq, dk, dv, None, None, None, None
 
 
-def replace_unet_modules(unet: diffusers.models.unet_2d_condition.UNet2DConditionModel, mem_eff_attn, xformers):
-    # unet is not used currently, but it is here for future use
+def replace_unet_modules(unet:UNet2DConditionModel, mem_eff_attn, xformers, sdpa):
     if mem_eff_attn:
-        replace_unet_cross_attn_to_memory_efficient()
+        print("Enable memory efficient attention for U-Net")
+        unet.set_use_memory_efficient_attention(False, True)
     elif xformers:
-        replace_unet_cross_attn_to_xformers()
+        print("Enable xformers for U-Net")
+        try:
+            import xformers.ops
+        except ImportError:
+            raise ImportError("No xformers / xformersがインストールされていないようです")
 
-
-def replace_unet_cross_attn_to_memory_efficient():
-    print("CrossAttention.forward has been replaced to FlashAttention (not xformers)")
-    flash_func = FlashAttentionFunction
-
-    def forward_flash_attn(self, x, context=None, mask=None):
-        q_bucket_size = 512
-        k_bucket_size = 1024
-
-        h = self.heads
-        q = self.to_q(x)
-
-        context = context if context is not None else x
-        context = context.to(x.dtype)
-
-        if hasattr(self, "hypernetwork") and self.hypernetwork is not None:
-            context_k, context_v = self.hypernetwork.forward(x, context)
-            context_k = context_k.to(x.dtype)
-            context_v = context_v.to(x.dtype)
-        else:
-            context_k = context
-            context_v = context
-
-        k = self.to_k(context_k)
-        v = self.to_v(context_v)
-        del context, x
-
-        q, k, v = map(lambda t: rearrange(t, "b n (h d) -> b h n d", h=h), (q, k, v))
-
-        out = flash_func.apply(q, k, v, mask, False, q_bucket_size, k_bucket_size)
-
-        out = rearrange(out, "b h n d -> b n (h d)")
-
-        # diffusers 0.7.0~  わざわざ変えるなよ (;´Д｀)
-        out = self.to_out[0](out)
-        out = self.to_out[1](out)
-        return out
-
-    diffusers.models.attention.CrossAttention.forward = forward_flash_attn
-
-
-def replace_unet_cross_attn_to_xformers():
-    print("CrossAttention.forward has been replaced to enable xformers.")
-    try:
-        import xformers.ops
-    except ImportError:
-        raise ImportError("No xformers / xformersがインストールされていないようです")
-
-    def forward_xformers(self, x, context=None, mask=None):
-        h = self.heads
-        q_in = self.to_q(x)
-
-        context = default(context, x)
-        context = context.to(x.dtype)
-
-        if hasattr(self, "hypernetwork") and self.hypernetwork is not None:
-            context_k, context_v = self.hypernetwork.forward(x, context)
-            context_k = context_k.to(x.dtype)
-            context_v = context_v.to(x.dtype)
-        else:
-            context_k = context
-            context_v = context
-
-        k_in = self.to_k(context_k)
-        v_in = self.to_v(context_v)
-
-        q, k, v = map(lambda t: rearrange(t, "b n (h d) -> b n h d", h=h), (q_in, k_in, v_in))
-        del q_in, k_in, v_in
-
-        q = q.contiguous()
-        k = k.contiguous()
-        v = v.contiguous()
-        out = xformers.ops.memory_efficient_attention(q, k, v, attn_bias=None)  # 最適なのを選んでくれる
-
-        out = rearrange(out, "b n h d -> b n (h d)", h=h)
-
-        # diffusers 0.7.0~
-        out = self.to_out[0](out)
-        out = self.to_out[1](out)
-        return out
-
-    diffusers.models.attention.CrossAttention.forward = forward_xformers
-
+        unet.set_use_memory_efficient_attention(True, False)
+    elif sdpa:
+        print("Enable SDPA for U-Net")
+        unet.set_use_sdpa(True)
 
 """
 def replace_vae_modules(vae: diffusers.models.AutoencoderKL, mem_eff_attn, xformers):
@@ -2125,6 +2051,7 @@ def add_training_arguments(parser: argparse.ArgumentParser, support_dreambooth: 
         help="use memory efficient attention for CrossAttention / CrossAttentionに省メモリ版attentionを使う",
     )
     parser.add_argument("--xformers", action="store_true", help="use xformers for CrossAttention / CrossAttentionにxformersを使う")
+    parser.add_argument("--sdpa", action="store_true", help="use sdpa for CrossAttention (requires PyTorch 2.0) / CrossAttentionにsdpaを使う（PyTorch 2.0が必要）")
     parser.add_argument(
         "--vae", type=str, default=None, help="path to checkpoint of vae to replace / VAEを入れ替える場合、VAEのcheckpointファイルまたはディレクトリ"
     )
@@ -2981,23 +2908,9 @@ def prepare_accelerator(args: argparse.Namespace):
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
         log_with=log_with,
-        logging_dir=logging_dir,
+        project_dir=logging_dir,
     )
-
-    # accelerateの互換性問題を解決する
-    accelerator_0_15 = True
-    try:
-        accelerator.unwrap_model("dummy", True)
-        print("Using accelerator 0.15.0 or above.")
-    except TypeError:
-        accelerator_0_15 = False
-
-    def unwrap_model(model):
-        if accelerator_0_15:
-            return accelerator.unwrap_model(model, True)
-        return accelerator.unwrap_model(model)
-
-    return accelerator, unwrap_model
+    return accelerator
 
 
 def prepare_dtype(args: argparse.Namespace):
@@ -3463,11 +3376,11 @@ def sample_images(
         unet=unet,
         tokenizer=tokenizer,
         scheduler=scheduler,
-        clip_skip=args.clip_skip,
         safety_checker=None,
         feature_extractor=None,
         requires_safety_checker=False,
     )
+    pipeline.clip_skip = args.clip_skip     # Pipelineのコンストラクタにckip_skipを追加できないので後から設定する
     pipeline.to(device)
 
     save_dir = args.output_dir + "/sample"
