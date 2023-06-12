@@ -17,5 +17,4 @@ SmilingWolf
 uninstall.txt
 test/output
 test/logs
-test/*.json
 test/ft
